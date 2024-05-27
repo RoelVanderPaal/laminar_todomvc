@@ -47,12 +47,9 @@ object Main extends App {
     )
     window.localStorage.setItem("todos", item)
   }
-  def pushPath     = (path: String) => {
-    println(path)
-    history.pushState({}, "", path)
-  }
+  def pushPath     = path => history.pushState({}, "", path)
 
-  val INIT_TODOS      = {
+  val INIT_TODOS = {
     val ts = window.localStorage.getItem("todos")
     if (ts == null) List.empty[TodoItem]
     else {
@@ -63,14 +60,6 @@ object Main extends App {
         .toList
     }
   }
-  val popstateFilters =
-    windowEvents(_.onPopState)
-      .map(_ => window.location.pathname)
-      .map(path =>
-        FILTERS
-          .find(_.path == path)
-          .getOrElse(FILTERS.head)
-      )
 
   val actionBus    = new EventBus[Action]
   val filterBus    = new EventBus[Filter]
@@ -99,22 +88,28 @@ object Main extends App {
       case _         => newTodos.nonEmpty && newTodos.forall(_.completed)
     }
     val newEditKey                       = action match {
-      case Edit(k)  => Some(k)
-      case ExitEdit => None
-      case Save(_)  => None
-      case _        => editKey
+      case Edit(k)            => Some(k)
+      case ExitEdit | Save(_) => None
+      case _                  => editKey
     }
     State(newTodos, newToggleAll, newEditKey)
   }
 
-  val todosSignal  = state.signal.map(_.todos)
-  val filterSignal = filterBus.stream.mergeWith(popstateFilters.toObservable).startWith(FILTERS.head)
+  val todosSignal     = state.signal.map(_.todos)
+  val popstateFilters =
+    windowEvents(_.onPopState)
+      .map(_ => window.location.pathname)
+      .map(path =>
+        FILTERS
+          .find(_.path == path)
+          .getOrElse(FILTERS.head)
+      )
+  val filterSignal    = filterBus.stream.mergeWith(popstateFilters.toObservable).startWith(FILTERS.head)
 
   val app = sectionTag(
     todosSignal --> persistTodos,
     actionBus --> stateUpdater,
     filterBus.events.map(_.path) --> pushPath,
-//    popstateFilters --> filterBus,
     cls("todoapp"),
     headerTag(
       cls("header"),
